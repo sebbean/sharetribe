@@ -10,6 +10,8 @@ Kassi::Application.routes.draw do
 
   resources :posts
 
+  get "/concierge" => 'pages#concierge'
+
   # The priority is based upon order of creation:
   # first created -> highest priority.
 
