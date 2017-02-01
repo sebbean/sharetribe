@@ -11,12 +11,12 @@ class PostsController < ApplicationController
     @post = wp.getPost(post_id: params[:id])
   end
 
-  private 
+  private
 
   def wp
     Rubypress::Client.new(host: "weareallnatives.wordpress.com",
-                      username: "weareallnatives", 
-                      password: "changeme13",
-                       use_ssl: true) 
+                      username: "weareallnatives",
+                      password: ENV["WORDPRESS_PW"],
+                       use_ssl: true)
   end
 end
