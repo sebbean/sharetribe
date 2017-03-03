@@ -65,6 +65,10 @@ Kassi::Application.routes.draw do
     post "/prospect_emails" => "marketplaces#create_prospect_email"
   end
 
+  # Harmony Proxy
+  # This endpoint proxies the requests to Harmony and does authorization
+  match '/harmony_proxy/*harmony_path' => 'harmony_proxy#proxy', via: :all
+
   # UI API, i.e. internal endpoints for dynamic UI that doesn't belong to under any specific controller
   get "/ui_api/topbar_props" => "topbar_api#props"
 
@@ -200,6 +204,9 @@ Kassi::Application.routes.draw do
       # Topbar menu
       get   "/topbar/edit"        => "communities#topbar",                      as: :topbar_edit
       patch "/topbar"             => "communities#update_topbar",               as: :topbar
+
+      # Landing page menu
+      get   "/landing_page"         => "communities#landing_page",                  as: :landing_page
 
       resources :communities do
         member do
@@ -441,7 +448,6 @@ Kassi::Application.routes.draw do
           member do
             get :account
             get :notifications
-            get :payments
             get :unsubscribe
           end
         end

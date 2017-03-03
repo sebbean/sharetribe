@@ -4,6 +4,19 @@ class TransactionsController < ApplicationController
     controller.ensure_logged_in t("layouts.notifications.you_must_log_in_to_view_your_inbox")
   end
 
+  before_filter only: [:new] do |controller|
+    fetch_data(params[:listing_id]).on_success do |listing_id, listing_model, _, process|
+      Analytics.record_event(
+        flash,
+        "BuyButtonClicked",
+        { listing_id: listing_id,
+          listing_uuid: listing_model.uuid_object.to_s,
+          payment_process: process[:process],
+          user_logged_in: @current_user.present?
+        })
+    end
+  end
+
   before_filter do |controller|
     controller.ensure_logged_in t("layouts.notifications.you_must_log_in_to_do_a_transaction")
   end
@@ -80,7 +93,9 @@ class TransactionsController < ApplicationController
               listing_uuid: listing_model.uuid_object,
               listing_title: listing_model.title,
               starter_id: @current_user.id,
+              starter_uuid: @current_user.uuid_object,
               listing_author_id: author_model.id,
+              listing_author_uuid: author_model.uuid_object,
               unit_type: listing_model.unit_type,
               unit_price: listing_model.price,
               unit_tr_key: listing_model.unit_tr_key,
@@ -174,34 +189,39 @@ class TransactionsController < ApplicationController
       return redirect_to search_path
     end
 
-    process_token = proc_status.dig(:data, :transaction_service_fields, :process_token)
-
-    tx = transaction_service.get(community_id: @current_community.id, transaction_id: params[:transaction_id])[:data]
+    tx_fields = proc_status.dig(:data, :transaction_service_fields) || {}
+    process_token = tx_fields[:process_token]
+    process_completed = tx_fields[:completed]
 
     if process_token.present?
-      # Operation was performed asynchronously
+      redirect_url = transaction_finalize_processed_path(process_token)
 
-      # We're using here the same PayPal spinner, although we could
-      # create a new one for TransactionService.
-      render "paypal_service/success", layout: false, locals: {
-        op_status_url: transaction_op_status_path(process_token),
-        redirect_url: transaction_finalize_processed_path(process_token, listing_id: tx[:listing_id])
-      }
+      if process_completed
+        redirect_to redirect_url
+      else
+        # Operation was performed asynchronously
+
+        # We're using here the same PayPal spinner, although we could
+        # create a new one for TransactionService.
+        render "paypal_service/success", layout: false, locals: {
+                 op_status_url: transaction_op_status_path(process_token),
+                 redirect_url: redirect_url
+               }
+      end
     else
-      handle_finalize_proc_result(proc_status, tx[:listing_id])
+      handle_finalize_proc_result(proc_status)
     end
   end
 
   def finalize_processed
     process_token = params[:process_token]
-    listing_id = params[:listing_id]
 
     proc_status = transaction_process_tokens.get_status(UUIDTools::UUID.parse(process_token))
     unless (proc_status[:success] && proc_status[:data][:completed])
       return redirect_to error_not_found_path
     end
 
-    handle_finalize_proc_result(proc_status[:data][:result], listing_id)
+    handle_finalize_proc_result(proc_status[:data][:result])
   end
 
   def transaction_op_status
@@ -257,15 +277,34 @@ class TransactionsController < ApplicationController
 
   private
 
-  def handle_finalize_proc_result(response, listing_id)
+  def handle_finalize_proc_result(response)
     response_data = response[:data] || {}
 
-    tx = response_data[:transaction]
-
     if response[:success]
+      tx = response_data[:transaction]
+
+      Analytics.record_event(
+        flash,
+        "TransactionCreated",
+        { listing_id: tx[:listing_id],
+          listing_uuid: tx[:listing_uuid].to_s,
+          transaction_id: tx[:id],
+          payment_process: tx[:payment_process] })
+
       redirect_to person_transaction_path(person_id: @current_user.id, id: tx[:id])
     else
-      flash[:error] = t("error_messages.booking.booking_failed_payment_voided")
+      listing_id = response_data[:listing_id]
+
+      flash[:error] =
+        case response_data[:reason]
+        when :connection_issue
+          t("error_messages.booking.booking_failed_payment_voided")
+        when :double_booking
+          t("error_messages.booking.double_booking_payment_voided")
+        else
+          t("error_messages.booking.booking_failed_payment_voided")
+        end
+
       redirect_to person_listing_path(person_id: @current_user.id, id: listing_id)
     end
   end
@@ -462,10 +501,8 @@ class TransactionsController < ApplicationController
   end
 
   def calculate_quantity(tx_params:, is_booking:, unit:)
-    if is_booking && unit == :day
-      DateUtils.duration_days(tx_params[:start_on], tx_params[:end_on])
-    elsif is_booking && unit == :night
-      DateUtils.duration_nights(tx_params[:start_on], tx_params[:end_on])
+    if is_booking
+      DateUtils.duration(tx_params[:start_on], tx_params[:end_on])
     else
       tx_params[:quantity] || 1
     end

@@ -6,7 +6,8 @@ module TransitUtils
     end
 
     def rep(u)
-      Transit::UUID.new(u.to_s)
+      tu = Transit::UUID.new(u.to_s)
+      [tu.most_significant_bits, tu.least_significant_bits]
     end
 
     def string_rep(u)
@@ -16,7 +17,7 @@ module TransitUtils
 
   class UUIDReadHandler
     def from_rep(u)
-      UUIDTools::UUID.parse(u)
+      UUIDTools::UUID.parse(Transit::UUID.new(u).to_s)
     end
   end
 
@@ -35,6 +36,8 @@ module TransitUtils
     io.string
   end
 
+  # Takes `content` (String) and `encoding` and decodes the Transit
+  # message
   def decode(content, encoding)
     Transit::Reader.new(
       encoding,
@@ -43,4 +46,5 @@ module TransitUtils
         "u" => UUIDReadHandler.new
       }).read
   end
+
 end

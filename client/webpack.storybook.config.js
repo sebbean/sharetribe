@@ -1,9 +1,7 @@
 /* eslint-env node */
 
 const path = require('path');
-
-// symlinked to .storybook/, hence the weird path
-const config = require('../webpack.client.base.config');
+const config = require('./webpack.client.base.config');
 
 delete config.plugins;
 
@@ -20,6 +18,10 @@ config.module.loaders.push(
     include: path.resolve(__dirname, '../'),
   },
   {
+    test: /\.scss$/,
+    loaders: ['style-loader', 'css-loader', 'sass-loader'],
+  },
+  {
     test: /\.(woff2?)$/,
     loader: 'url?limit=10000',
   },
@@ -30,6 +32,10 @@ config.module.loaders.push(
   {
     test: /\.(jpe?g|png|gif|ico)$/,
     loader: 'customfile-loader?limit=10000&name=[name]-[hash].[ext]&hotMode=true',
+  },
+  {
+    test: /\.json$/,
+    loader: 'json-loader',
   },
   {
     test: /\.svg$/,

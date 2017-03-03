@@ -1,3 +1,17 @@
+import _ from 'lodash';
+
+const paramsToQueryString = (paramsMap) => {
+  if (_.isEmpty(paramsMap)) {
+    return '';
+  } else {
+    const keyValues = _.map(paramsMap, (val, key) => [
+      window.encodeURIComponent(key),
+      window.encodeURIComponent(val),
+    ].join('=')).join('&');
+    return `?${keyValues}`;
+  }
+};
+
 /**
  * Parse a URL search query string.
  *
@@ -73,9 +87,19 @@ const currySearchParams = function currySearchParams(restrict_to_params) {
   };
 };
 
+const upsertSearchQueryParam = function upsertSearchQueryParam(location, param, value) {
+  const originalParams = parseSearchQueryParams(location);
+  const newParams = { ...originalParams, [param]: value };
+  return _.map(newParams, (v, k) =>
+    `${encodeURIComponent(k)}=${encodeURIComponent(v)}`
+  ).join('&');
+};
+
 export {
   parseQuery,
   parseQueryString,
   parseSearchQueryParams,
   currySearchParams,
+  upsertSearchQueryParam,
+  paramsToQueryString,
 };
